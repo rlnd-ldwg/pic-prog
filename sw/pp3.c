@@ -1029,7 +1029,10 @@ int parse_hex (char * filename, unsigned char * progmem, unsigned char * config)
     if (verbose>2) printf ("Opening filename %s \n", filename);
     FILE* sf = fopen(filename, "r");
     if (sf==0)
+        {
+        fprintf (stderr,"Can't open hex file %s\n",filename);
         return -1;
+        }
     line_address_offset = 0;
     if (chip_family==CF_P16F_A) p16_cfg = 1;
     if (chip_family==CF_P16F_B) p16_cfg = 1;
@@ -1125,7 +1128,12 @@ int main(int argc, char *argv[])
     char* filename=argv[argc-1];
     pm_point = (unsigned char *)(&progmem);
     cm_point = (unsigned char *)(&config_bytes);
-    parse_hex(filename,pm_point,cm_point);					//parse and write content of hex file into buffers
+    if (program==1 && parse_hex(filename,pm_point,cm_point))
+        //parse and write content of hex file into buffers
+        {
+        fprintf (stderr,"Failed to read input file.\n");
+        abort ();
+        }
 
     //now this is ugly kludge
     //my original programmer expected only file_image holding the image of memory to be programmed

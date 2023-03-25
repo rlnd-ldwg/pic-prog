@@ -1029,7 +1029,7 @@ int prog_get_device_id (void)
     if (verbose>2) flsprintf(stdout,"getting ID for family %d\n",chip_family);
     if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D))
         return p16a_get_devid();
-    if ((chip_family==CF_P16F_C))
+    if (chip_family==CF_P16F_C)
         return p16c_get_devid();
     else if ((chip_family==CF_P18F_A)|(chip_family==CF_P18F_B)|(chip_family==CF_P18F_D)|(chip_family==CF_P18F_E))
         {
@@ -1338,7 +1338,7 @@ int main(int argc, char *argv[])
         if (program==1)
             {
             if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D)) p16a_mass_erase();
-            if ((chip_family==CF_P16F_C)) p16c_mass_erase();
+            if (chip_family==CF_P16F_C) p16c_mass_erase();
             if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D)) p16a_rst_pointer();				//pointer reset is needed before every "big" operation
             if (verbose>0) printf ("Programming FLASH (%d B in %d pages)",flash_size,flash_size/page_size);
             fflush(stdout);
@@ -1350,7 +1350,7 @@ int main(int argc, char *argv[])
                     fflush(stdout);
                     }
                 if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D)) p16a_program_page(i,page_size,0);
-                if ((chip_family==CF_P16F_C)) p16c_write_page(progmem+i,i,page_size);
+                if (chip_family==CF_P16F_C) p16c_write_page(progmem+i,i,page_size);
                 }
             if (verbose>0) printf ("\n");
             if (verbose>0) printf ("Programming config\n");
@@ -1370,7 +1370,7 @@ int main(int argc, char *argv[])
                     fflush(stdout);
                     }
                 if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D)) p16a_read_page(tdat,page_size);
-                if ((chip_family==CF_P16F_C)) p16c_read_page(tdat,i,page_size);
+                if (chip_family==CF_P16F_C) p16c_read_page(tdat,i,page_size);
                 for (j=0; j<page_size; j++)
                     {
                     if (file_image[i+j] != tdat[j])

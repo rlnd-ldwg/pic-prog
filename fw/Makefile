@@ -6,6 +6,7 @@ PORT=/dev/ttyUSB0
 all:
 	@echo "'make upload TARGET=uno' for Arduino uno"
 	@echo "'make upload TARGET=nano' for Arduino nano"
+	@echo "'make upload TARGET=loonardo' for Arduino leonardo and pro micro"
 
 compile:
 	arduino-cli core install arduino:avr

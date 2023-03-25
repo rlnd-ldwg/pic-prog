@@ -415,7 +415,7 @@ int setCPUtype(char* cpu)
     size_t len = 0;
     if (verbose>2) printf ("Opening filename %s \n", filename);
     FILE* sf = fopen(filename, "r");
-#if defined(__linux__)
+#if defined(__linux__) || defined(__APPLE__)
     if (sf==0)
         {
         filename = "/etc/pp3/pp3_devices.dat";

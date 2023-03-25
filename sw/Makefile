@@ -11,7 +11,7 @@ all: pp3
 
 pp3: pp3.o
 	$(CC) $^ -o pp3
-	
+
 install: pp3 
 	mkdir -p $(DESTDIR)/etc/pp3
 	install -m0644 pp3_devices.dat $(DESTDIR)/etc/pp3/

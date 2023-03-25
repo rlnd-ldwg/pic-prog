@@ -42,8 +42,10 @@ char * PP_VERSION = "0.99";
 #define	CF_P18F_Qxx	14
 
 int verbose = 1,verify = 1,program = 1;
+int reset = 0;
 // set a proper init value for sleep time to avoid a lot of issues such as 'rx fail'.
 int sleep_time = 2000;
+int reset_time = 30;
 int devid_expected,devid_mask,baudRate,com,flash_size,page_size,chip_family,config_size;
 unsigned char file_image[70000],progmem[PROGMEM_LEN], config_bytes[CONFIG_LEN];
 
@@ -335,6 +337,7 @@ void printHelp()
     flsprintf(stdout,"-c PORT : serial port device\n");
     flsprintf(stdout,"-t MODEL : target MCU model, such as '16f1824'\n");
     flsprintf(stdout,"-s TIME : sleep time in ms while arduino bootloader expires (default: 2000)\n");
+    flsprintf(stdout,"-r TIME : reset target and sleep time in ms before programming (default: 30)\n");
     flsprintf(stdout,"-v NUM : verbose output level (default: 1)\n");
     flsprintf(stdout,"-n : skip verify after program\n");
     flsprintf(stdout,"-p : skip program \n");
@@ -346,7 +349,7 @@ void printHelp()
 void parseArgs(int argc, char *argv[])
     {
     int c;
-    while ((c = getopt (argc, argv, "c:nphs:t:v:")) != -1)
+    while ((c = getopt (argc, argv, "c:nphs:r:t:v:")) != -1)
         {
         switch (c)
             {
@@ -363,6 +366,10 @@ void parseArgs(int argc, char *argv[])
                 break;
             case 's' :
                 sscanf(optarg,"%d",&sleep_time);
+                break;
+            case 'r' :
+                reset = 1;
+                sscanf(optarg,"%d",&reset_time);
                 break;
             case 't' :
                 setCPUtype(optarg);
@@ -1010,6 +1017,11 @@ int prog_exit_progmode (void)
     return 0;
     }
 
+int prog_reset (void)
+    {
+    return prog_exit_progmode();
+    }
+
 int prog_get_device_id (void)
     {
     unsigned char mem_str[10];
@@ -1017,7 +1029,7 @@ int prog_get_device_id (void)
     if (verbose>2) flsprintf(stdout,"getting ID for family %d\n",chip_family);
     if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D))
         return p16a_get_devid();
-    if ((chip_family==CF_P16F_C))
+    if (chip_family==CF_P16F_C)
         return p16c_get_devid();
     else if ((chip_family==CF_P18F_A)|(chip_family==CF_P18F_B)|(chip_family==CF_P18F_D)|(chip_family==CF_P18F_E))
         {
@@ -1176,6 +1188,13 @@ int main(int argc, char *argv[])
             file_image[i] = 0x3F&file_image[i];
         }
 
+    if (reset)
+        {
+        printf ("Reset the target and wait for %d ms\n", reset_time);
+        prog_reset();
+        sleep_ms (reset_time);
+        }
+
     prog_enter_progmode();									//enter programming mode and probe the target
     i = prog_get_device_id();
     if (i==devid_expected)
@@ -1319,7 +1338,7 @@ int main(int argc, char *argv[])
         if (program==1)
             {
             if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D)) p16a_mass_erase();
-            if ((chip_family==CF_P16F_C)) p16c_mass_erase();
+            if (chip_family==CF_P16F_C) p16c_mass_erase();
             if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D)) p16a_rst_pointer();				//pointer reset is needed before every "big" operation
             if (verbose>0) printf ("Programming FLASH (%d B in %d pages)",flash_size,flash_size/page_size);
             fflush(stdout);
@@ -1331,7 +1350,7 @@ int main(int argc, char *argv[])
                     fflush(stdout);
                     }
                 if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D)) p16a_program_page(i,page_size,0);
-                if ((chip_family==CF_P16F_C)) p16c_write_page(progmem+i,i,page_size);
+                if (chip_family==CF_P16F_C) p16c_write_page(progmem+i,i,page_size);
                 }
             if (verbose>0) printf ("\n");
             if (verbose>0) printf ("Programming config\n");
@@ -1351,7 +1370,7 @@ int main(int argc, char *argv[])
                     fflush(stdout);
                     }
                 if ((chip_family==CF_P16F_A)|(chip_family==CF_P16F_B)|(chip_family==CF_P16F_D)) p16a_read_page(tdat,page_size);
-                if ((chip_family==CF_P16F_C)) p16c_read_page(tdat,i,page_size);
+                if (chip_family==CF_P16F_C) p16c_read_page(tdat,i,page_size);
                 for (j=0; j<page_size; j++)
                     {
                     if (file_image[i+j] != tdat[j])

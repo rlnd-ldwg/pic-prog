@@ -43,6 +43,7 @@ char * PP_VERSION = "0.99";
 
 int verbose = 1,verify = 1,program = 1;
 int reset = 0;
+int hvp = 0;
 // set a proper init value for sleep time to avoid a lot of issues such as 'rx fail'.
 int sleep_time = 2000;
 int reset_time = 30;
@@ -339,6 +340,7 @@ void printHelp()
     flsprintf(stdout,"-s TIME : sleep time in ms while arduino bootloader expires (default: 2000)\n");
     flsprintf(stdout,"-r TIME : reset target and sleep time in ms before programming (default: 30)\n");
     flsprintf(stdout,"-v NUM : verbose output level (default: 1)\n");
+    flsprintf(stdout,"-i : use high voltage programming (only for Arduino Uno and CF_P16F_A, see README.md for differing connection to PIC!)\n");
     flsprintf(stdout,"-n : skip verify after program\n");
     flsprintf(stdout,"-p : skip program \n");
     flsprintf(stdout,"-h : show this help message and exit\n");
@@ -349,7 +351,7 @@ void printHelp()
 void parseArgs(int argc, char *argv[])
     {
     int c;
-    while ((c = getopt (argc, argv, "c:nphs:r:t:v:")) != -1)
+    while ((c = getopt (argc, argv, "c:nphis:r:t:v:")) != -1)
         {
         switch (c)
             {
@@ -363,6 +365,9 @@ void parseArgs(int argc, char *argv[])
                 program = 0;
                 // skip program means also skip verify.
                 verify = 0;
+                break;
+            case 'i':
+                hvp = 1;
                 break;
             case 's' :
                 sscanf(optarg,"%d",&sleep_time);
@@ -992,7 +997,8 @@ int p18q_read_cfg (unsigned char * data, int address, unsigned char num)
 int prog_enter_progmode (void)
     {
     if (verbose>2) flsprintf(stdout,"Entering programming mode\n");
-    if (chip_family==CF_P16F_A) putByte(0x01);
+    if (chip_family==CF_P16F_A && hvp==1) putByte(0x91);
+    else if (chip_family==CF_P16F_A) putByte(0x01);
     else if (chip_family==CF_P16F_B) putByte(0x01);
     else if (chip_family==CF_P16F_D) putByte(0x01);
     else if (chip_family==CF_P18F_A) putByte(0x10);
@@ -1011,7 +1017,10 @@ int prog_enter_progmode (void)
 int prog_exit_progmode (void)
     {
     if (verbose>2) flsprintf(stdout,"Exiting programming mode\n");
-    putByte(0x02);
+    if (chip_family==CF_P16F_A && hvp==1)
+        putByte(0x92);
+    else
+        putByte(0x02);
     putByte(0x00);
     getByte();
     return 0;

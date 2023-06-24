@@ -28,6 +28,17 @@ Power it up, no smoke should be released. Run arduino IDE, open programmer firmw
 The programmer is proven to work with some generic Uno board from china, as well as chinese arduino-nano clone
 ![img_5494](https://cloud.githubusercontent.com/assets/6984904/17290864/ddd9d386-57e0-11e6-8d15-55c6c0e015a6.JPG)
 
+#### High Voltage Programming
+Basically copied from https://github.com/rweather/ardpicprog and only implemented for Arduino Uno and `CF_P16F_A`. Needs the transistor and resistors from https://rweather.github.io/ardpicprog/pic14_zif_circuit.html (tested only for 16f1825: 9V block battery as power source, BC 337, 1k for the base and 10k for the emitter) and these connections to the Arduino:
+
+| Arduino pin | AVR pin | Target pin / comment          |
+|-------------|---------|-------------------------------|
+| GND         | GND     | GND/VSS                       |
+| A0          | PC0     | PGC                           |
+| A1          | PC1     | PGD                           |
+| A2          | PC2     | VDD                           |
+| A4          | PC4     | MCLR transistor base resistor |
+
 ### Hardware option 2 - dedicated board
 I designed this little board, see at /hw directory
 ![img_4319](https://cloud.githubusercontent.com/assets/6984904/17289293/5cedd6c0-57d9-11e6-86b8-8d692eaa24e3.JPG)

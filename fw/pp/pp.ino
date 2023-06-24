@@ -16,6 +16,8 @@
     #define ISP_MCLR  3     // A3 (PC3)
     #define ISP_DAT   1     // A1 (PC1)
     #define ISP_CLK   0     // A0 (PC0)
+    #define ISP_HVP_MCLR 4  // A4 (PC4)
+    #define ISP_HVP_VDD  2  // A2 (PC2)
 #elif defined(ARDUINO_AVR_LEONARDO)
     // Arduino Leonardo
     #define ISP_PORT  PORTF
@@ -44,6 +46,16 @@
 #define  ISP_CLK_D_I ISP_DDR &= ~(1<<ISP_CLK);
 #define  ISP_CLK_D_0 ISP_DDR |= (1<<ISP_CLK);
 
+#define  ISP_HVP_MCLR_HV_OFF ISP_PORT |= (1<<ISP_HVP_MCLR); // inverted by transistor
+#define  ISP_HVP_MCLR_HV_ON ISP_PORT &= ~(1<<ISP_HVP_MCLR); // inverted by transistor
+#define  ISP_HVP_MCLR_D_I ISP_DDR &= ~(1<<ISP_HVP_MCLR);
+#define  ISP_HVP_MCLR_D_0 ISP_DDR |= (1<<ISP_HVP_MCLR);
+
+#define  ISP_HVP_VDD_ON ISP_PORT |= (1<<ISP_HVP_VDD);
+#define  ISP_HVP_VDD_OFF ISP_PORT &= ~(1<<ISP_HVP_VDD);
+#define  ISP_HVP_VDD_D_I ISP_DDR &= ~(1<<ISP_HVP_VDD);
+#define  ISP_HVP_VDD_D_0 ISP_DDR |= (1<<ISP_HVP_VDD);
+
 #define  ISP_CLK_DELAY  1
 void isp_send (unsigned int data, unsigned char n);
 unsigned int isp_read_16 (void);
@@ -51,6 +63,8 @@ void acquire_isp_dat_clk(void);
 void release_isp_dat_clk(void);
 unsigned char enter_progmode (void);
 unsigned char exit_progmode (void);
+unsigned char enter_progmode_hvp (void);
+unsigned char exit_progmode_hvp (void);
 void isp_read_pgm (unsigned int * data, unsigned char n);
 void isp_write_pgm (unsigned int * data, unsigned char n);
 void isp_mass_erase (void);
@@ -126,6 +140,10 @@ void setup(void)
   release_isp_dat_clk();
   ISP_MCLR_D_0
   ISP_MCLR_1
+  ISP_HVP_MCLR_D_0
+  ISP_HVP_MCLR_HV_OFF
+  ISP_HVP_VDD_D_0
+  ISP_HVP_VDD_OFF
   rx_state = 0;
   /*
   while (1)
@@ -422,6 +440,18 @@ void loop()
           usart_tx_b (0xC3);
           rx_state = 0;
           }         
+        if (rx_message[0]==0x91)
+          {
+          enter_progmode_hvp();
+          usart_tx_b (0x81);
+          rx_state = 0;
+          }
+        if (rx_message[0]==0x92)
+          {
+          exit_progmode_hvp();
+          usart_tx_b (0x82);
+          rx_state = 0;
+          }
         }
       }      
 }
@@ -718,6 +748,10 @@ void release_isp_dat_clk (void)
 
 unsigned char enter_progmode (void)
 {
+// just in case PIC VDD is connected to ISP_HVP_VDD also for low voltage programming
+ISP_HVP_VDD_ON
+_delay_ms(500);
+
 acquire_isp_dat_clk();
 ISP_MCLR_0
 _delay_us(300);
@@ -727,7 +761,30 @@ isp_send(0b01000011,8);
 isp_send(0b01001101,8);
 
 isp_send(0,1);
+}
 
+// copied from https://github.com/rweather/ardpicprog/blob/2f8b5405440b30b0390f6d9d459da70e70e894cd/ProgramPIC/ProgramPIC.pde#L1084-L1113
+unsigned char enter_progmode_hvp (void)
+{
+// Lower MCLR, VDD, DATA, and CLOCK initially.  This will put the
+// PIC into the powered-off, reset state just in case.
+ISP_HVP_MCLR_HV_OFF
+ISP_HVP_VDD_OFF
+ISP_DAT_0
+ISP_CLK_0
+
+// Wait for the lines to settle.
+_delay_us(50);
+
+// Switch DATA and CLOCK into outputs.
+ISP_DAT_D_0
+ISP_CLK_D_0
+
+// Raise MCLR, then VDD.
+ISP_HVP_MCLR_HV_ON
+_delay_us(5);
+ISP_HVP_VDD_ON
+_delay_us(5);
 }
 
 /**************************************************************************************************************************/
@@ -964,6 +1021,20 @@ _delay_ms(30);
 ISP_MCLR_0
 _delay_ms(30);
 ISP_MCLR_1
+}
+
+// copied from https://github.com/rweather/ardpicprog/blob/2f8b5405440b30b0390f6d9d459da70e70e894cd/ProgramPIC/ProgramPIC.pde#L1116-L1135
+unsigned char exit_progmode_hvp (void)
+{
+// Lower MCLR, VDD, DATA, and CLOCK.
+ISP_HVP_MCLR_HV_OFF
+ISP_HVP_VDD_OFF
+ISP_DAT_0
+ISP_CLK_0
+
+// Float the DATA and CLOCK pins.
+ISP_DAT_D_I
+ISP_CLK_D_I
 }
 
 //***********************************************************************************//

@@ -18,8 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
  * MA 02110-1301, USA.
  * 
- * constant and macros for main program
- * used in firmware.c
+ * constant and macro definition for main program
  * 
  * initial version 2023/10/26
  * 
@@ -33,9 +32,9 @@
 #define ISP_PIN   PINC
 #define ISP_CLK   0     // A0/PC0 PIC: programm clock (PGC)
 #define ISP_DAT   1     // A1/PC1 PIC: programm data (PGD)
-#define ISP_MCLR  3     // A3/Pc3 PIC: reset (MCLR)
-#define ISP_HVP_MCLR 4  // A4 (PC4)
-#define ISP_HVP_VDD  2  // A2 (PC2)
+#define ISP_MCLR  3     // A3/PC3 PIC: reset (MCLR)
+#define ISP_HVP_MCLR 4  // A4/PC4 PIC: VPP (same as MCLR Pin but for HVP - conversion necessary to use LVP and HPV together
+#define ISP_HVP_VDD  2  // A2/PC2 PIC: VDD 
 
 #define ISP_CLK_DELAY  1
 #define _BAUD   57600   				// Baud rate (9600 is default)

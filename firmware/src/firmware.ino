@@ -4,13 +4,14 @@
  * last change 2023-10-23 : fucntion type og enter_progmode/exit_progmode set to void
  * 2023-10-24: cosmetic changes
  * 2023-10-26: introduction of constants for commands / changed "if" statements to "switch"
+ * 2023/10/27: 
  * 
  */
 
 #include <avr/io.h>
 #include <util/delay.h>
-#include "commands.h"
-#include "firmware.h"		// constant & macros
+#include "commands.h"       // command values
+#include "firmware.h"       // constant & macros
 
 void isp_send (unsigned int data, unsigned char n);
 unsigned int isp_read_16 (void);
@@ -52,10 +53,10 @@ void p_18_modfied_nop (void);
 void p18_isp_mass_erase (void);
 void p18fk_isp_mass_erase (unsigned char data1, unsigned char data2, unsigned char data3);
 
-void usart_tx_b(uint8_t data);
-uint8_t usart_rx_rdy(void);
-uint8_t usart_rx_b(void);
-void usart_tx_s(uint8_t * data);
+void txByte(uint8_t data);
+uint8_t rxReady(void);
+uint8_t rxByte(void);
+void txString(uint8_t * data);
 
 
 unsigned int fmimg[32] =
@@ -77,6 +78,104 @@ unsigned int flash_buffer[260];
 unsigned int test, cfg_val;
 unsigned long addr;
 
+/* serial interface */
+
+void txByte(uint8_t data)
+{
+    while (!(UCSR0A & _BV(UDRE0)));
+    UDR0 = data;
+} 
+
+void txString(uint8_t * data)
+{
+    while (*data!=0) 
+        txByte(*data++);
+} 
+
+uint8_t rxReady(void)
+{
+    if (UCSR0A & _BV(RXC0))
+        return 1;
+    else
+        return 0;
+}
+
+uint8_t rxByte(void)
+{
+    return (uint8_t) UDR0;
+} 
+
+void txHexNo (uint8_t value)
+{
+    uint8_t temp;
+    
+//    temp = value;
+    temp = ((value >> 4) & 0x0F);
+    temp = temp < 10 ? temp + '0' : temp + 'A' - 10;
+//    if (temp<10)
+//        temp = temp + '0';
+//    else
+//        temp = temp + 'A' - 10;
+    txByte(temp);
+//    temp = value;
+//    temp = ((temp >> 0) & 0x0F);
+    temp = (value & 0x0F);
+    temp = temp < 10 ? temp + '0' : temp + 'A' - 10;
+//    if (temp<10)
+//        temp = temp + '0';
+//    else
+//        temp = temp + 'A' - 10;
+    txByte(temp);
+}
+
+void txHexByte (uint8_t value)
+{
+//uint8_t temp;
+//temp = value;
+    txByte('0');
+    txByte('x');
+    txHexNo(value);
+    txByte(' ');
+}
+
+void txHexWord (uint16_t value)
+{
+  txByte('0');
+  txByte('x');
+  txHexNo((value >> 8) & 0xFF);
+  txHexNo(value & 0xFF);
+  txByte(' ');
+}
+
+unsigned char rx_state_machine (unsigned char state, unsigned char rx_char)
+{
+/* state=0: rx command -> rx_message[0]
+ * state=1: rx number of bytes -> rx_message[1]
+ * state=2: rx all bytes ^ -> rx_message[2-xx]
+ * state=3: all bytes received
+ */ 
+    if (state==0)
+    {
+        rx_message_ptr = 0;
+        rx_message[rx_message_ptr++] = rx_char;
+        return 1;
+    }
+    if (state==1)
+    {
+        bytes_to_receive = rx_char;
+        rx_message[rx_message_ptr++] = rx_char;
+        if (bytes_to_receive==0) return 3;
+        return 2;
+    }
+    if (state==2)
+    {
+        rx_message[rx_message_ptr++] = rx_char;
+        bytes_to_receive--;
+        if (bytes_to_receive==0) return 3;
+    }
+    return state;  
+} // rx_state_maschine
+
 int main (void)
 {
     UBRR0H = ((_UBRR) & 0xF00);
@@ -97,58 +196,58 @@ int main (void)
    ISP_HVP_VDD_D_0
    ISP_HVP_VDD_OFF
 
-    rx_state = 0;
+   rx_state = 0;
 /*
   while (1)
   {
-    if (usart_rx_rdy())
+    if (rxReady())
       {
-      rx = usart_rx_b();
+      rx = rxByte();
       if (rx=='i')
         {
-        usart_tx_b ('I');
-        usart_tx_b (0x0A);
+        txByte ('I');
+        txByte (0x0A);
         enter_progmode();
 //        test = get_ID();
         exit_progmode();
-        usart_tx_hexa_16(test);
-        usart_tx_b (0x0A);
+        txHexWord(test);
+        txByte (0x0A);
         }
       if (rx=='r')
         {
-        usart_tx_b ('R');
-        usart_tx_b (0x0A);
+        txByte ('R');
+        txByte (0x0A);
         enter_progmode();
         isp_reset_pointer();
         isp_read_pgm(flash_buffer,64);
         exit_progmode();
         for (i=0;i<64;i++)
           {
-          if (i%4==0) usart_tx_b (0x0A);
-          usart_tx_hexa_16(flash_buffer[i]);
+          if (i%4==0) txByte (0x0A);
+          txHexWord(flash_buffer[i]);
           }
-        usart_tx_b (0x0A);
+        txByte (0x0A);
         }
       if (rx=='w')
         {
-        usart_tx_b ('W');
+        txByte ('W');
         enter_progmode();
         isp_reset_pointer();
         isp_write_pgm(fmimg,32,0);
 //        p16c_isp_write_pgm(fmimg,32,32);
         exit_progmode();
-        usart_tx_b ('*');
-        usart_tx_b (0x0A);
+        txByte ('*');
+        txByte (0x0A);
         }
       if (rx=='e')
         {
-        usart_tx_b ('E');
+        txByte ('E');
         enter_progmode();
         isp_reset_pointer();
         isp_mass_erase();
         exit_progmode();
-        usart_tx_b ('*');
-        usart_tx_b (0x0A);
+        txByte ('*');
+        txByte (0x0A);
         }
           
       }
@@ -157,253 +256,233 @@ int main (void)
     */
     while (1)
     {
-        if (usart_rx_rdy())
+        if (rxReady())
         {
-            rx = usart_rx_b();
+            rx = rxByte();
             rx_state = rx_state_machine (rx_state, rx);
             if (rx_state==3)
             {
                 switch (rx_message[0])
                 {
-					case ENTER_PROGMODE:
-						enter_progmode();
-						usart_tx_b (0x81);
-						rx_state = 0;
-						break;
-					case EXIT_PROGMODE:
+                    case ENTER_PROGMODE:
+                        enter_progmode();
+                        txByte (0x81);
+                        rx_state = 0;
+                        break;
+                    case EXIT_PROGMODE:
                         exit_progmode();
-						usart_tx_b (0x82);
-						rx_state = 0;
-						break;
-					case ISP_RESET_PTR:
-						isp_reset_pointer();
-						usart_tx_b (0x83);
-						rx_state = 0;
-						break;
-					case ISP_SEND_CFG:
-						isp_send_config(0);
-						usart_tx_b (0x84);
-						rx_state = 0;
-						break;
-					case ISP_INC_PTR:
-						for (i=0; i<rx_message[2]; i++)
-						{
-							isp_inc_pointer();
-						}
-						usart_tx_b (0x85);
-						rx_state = 0;
-						break;
-					case ISP_READ_PGM:
-						usart_tx_b (0x86);
-						isp_read_pgm(flash_buffer,rx_message[2]);
-						for (i=0;i<rx_message[2];i++)
-						{
-							usart_tx_b (flash_buffer[i]&0xFF);
-							usart_tx_b (flash_buffer[i]>>8);
-						}
-						rx_state = 0;
-						break;
-					case ISP_MASS_ERASE:
-						isp_mass_erase();
-						usart_tx_b (0x87);
-						rx_state = 0;
-						break;
-					case ISP_WRITE_PGM:
-						for (i=0;i<rx_message[2]/2;i++)
-						{
-							flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+4]))<<8) + (((unsigned int)(rx_message[(2*i)+0+4]))<<0);
-						}
-						isp_write_pgm(flash_buffer,rx_message[2]/2,rx_message[3]);
-						usart_tx_b (0x88);
-						rx_state = 0;
-						break;
-					case ISP_RESET_PTR:
-						isp_reset_pointer_16d();
-						usart_tx_b (0x89);
-						rx_state = 0;
-						break;        
-					case P18_ENTER_PROGMODE:
-						p18_enter_progmode();
-						usart_tx_b (0x90);
-						rx_state = 0;
-						break;
-					case P18_ENTER_PROGMODE:
-						usart_tx_b (0x91);
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						p_18_isp_read_pgm (flash_buffer, addr, rx_message[2]);
-						for (i=0;i<rx_message[2];i++)
-						{
-							usart_tx_b (flash_buffer[i]&0xFF);
-							usart_tx_b (flash_buffer[i]>>8);
-						}
-						rx_state = 0;
-						break;
-					case P18_ISP_WRITE_PGM:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						for (i=0;i<rx_message[2]/2;i++)
-						{
-							flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+6]))<<8) + (((unsigned int)(rx_message[(2*i)+0+6]))<<0);
-						}
-						p18_isp_write_pgm (flash_buffer, addr, rx_message[2]/2);
-						usart_tx_b (0x92);
-						rx_state = 0;
-						break;
-					case P18_ISP_MASS_ERASE:
-						p18_isp_mass_erase();
-						usart_tx_b (0x93);
-						rx_state = 0;
-						break;
-					case P18_ISP_WRITE_CFG:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						p18_isp_write_cfg (rx_message[6],rx_message[7], addr);
-						usart_tx_b (0x94);
-						rx_state = 0;
-						break;
-					case P18FJ_ISP_MASS_ERASE:
-						p18fj_isp_mass_erase();
-						usart_tx_b (0xA3);
-						rx_state = 0;
-						break;
-					case P18FK_ISP_MASS_ERASE:
-						p18fk_isp_mass_erase (rx_message[2], rx_message[3], rx_message[4]);
-						usart_tx_b (0xB0);
-						rx_state = 0;
-						break;
-					case P18FK_ISP_WRITE_PGM:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						for (i=0;i<rx_message[2]/2;i++)
-						{
-							flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+6]))<<8) + (((unsigned int)(rx_message[(2*i)+0+6]))<<0);
-						}
-						p18fk_isp_write_pgm (flash_buffer, addr, rx_message[2]/2);
-						usart_tx_b (0xB1);
-						rx_state = 0;
-						break;
-					case P18FK_ISP_WRITE_CFG:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						p18fk_isp_write_cfg (rx_message[6],rx_message[7], addr);
-						usart_tx_b (0xB2);
-						rx_state = 0;
-						break;  
-					case P16C_ENTER_PROGMODE:
-						p16c_enter_progmode();
-						usart_tx_b (0xC0);
-						rx_state = 0;   
-						break;      
-					case P16C_ISP_READ_PGM:
-						usart_tx_b (0xC1);
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						p16c_isp_read_pgm (flash_buffer, addr, rx_message[2]);
-						for (i=0;i<rx_message[2];i++)
-						{
-							usart_tx_b (flash_buffer[i]&0xFF);
-							usart_tx_b (flash_buffer[i]>>8);
-						}
-						rx_state = 0;
-						break;
-					case P16C_ISP_WRITE_PGM:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						for (i=0;i<rx_message[2]/2;i++)
-						{
-							flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+6]))<<8) + (((unsigned int)(rx_message[(2*i)+0+6]))<<0);
-						}
-						p16c_isp_write_pgm (flash_buffer, addr, rx_message[2]/2);
-						usart_tx_b (0xC2);
-						rx_state = 0;
-						break;
-					case P16C_BULK_ERASE:
-						p16c_set_pc (0x8000);
-						p16c_bulk_erase ();
-						usart_tx_b (0xC3);
-						rx_state = 0;
-						break;         
-					case P16C_ISP_WRITE_CFG:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						cfg_val = rx_message[6];
-						cfg_val = (cfg_val<<8) + rx_message[7];
-						p16c_isp_write_cfg (cfg_val, addr);
-						usart_tx_b (0xC4);
-						rx_state = 0;
-						break;                      
-					case P18Q_ISP_WRITE_CFG:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						cfg_val = rx_message[6];
-						cfg_val = (cfg_val<<8) + rx_message[7];
-						p18q_isp_write_cfg (cfg_val, addr);
-						usart_tx_b (0xC5);
-						rx_state = 0;
-						break; 
-					case P18Q_ISP_WRITE_PGM:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						for (i=0;i<rx_message[2]/2;i++)
-						{
-							flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+6]))<<8) + (((unsigned int)(rx_message[(2*i)+0+6]))<<0);
-						}
-						p18q_isp_write_pgm (flash_buffer, addr, rx_message[2]/2);
-						usart_tx_b (0xC6);
-						rx_state = 0;
-						break;
-					case P18Q_ISP_READ_CFG:
-						usart_tx_b (0xC7);
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						p18q_isp_read_cfg (flash_buffer, addr, rx_message[2]);
-						for (i=0;i<rx_message[2];i++)
-						{
-							usart_tx_b (flash_buffer[i]&0xFF);
-						}
-						rx_state = 0;
-						break;
-					case P18Q_ISP_WRITE_CFG_ADDR:
-						addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
-						p18q_isp_write_cfg (rx_message[6], addr);
-						usart_tx_b (0xC5);
-						rx_state = 0;
-						break; 
-					case P18QXX_BULK_ERASE:
-						p18qxx_bulk_erase ();
-						usart_tx_b (0xC3);
-						rx_state = 0;
-						break;         
-					case ENTER_PROGMODE_HVP:
-						enter_progmode_hvp();
-						usart_tx_b (0x81);
-						rx_state = 0;
-						break;
-					case EXIT_PROGMODE_HVP:
-						exit_progmode_hvp();
-						usart_tx_b (0x82);
-						rx_state = 0;
-						break;
-				} // switch        
+                        txByte (0x82);
+                        rx_state = 0;
+                        break;
+                    case ISP_RESET_PTR:
+                        isp_reset_pointer();
+                        txByte (0x83);
+                        rx_state = 0;
+                        break;
+                    case ISP_SEND_CFG:
+                        isp_send_config(0);
+                        txByte (0x84);
+                        rx_state = 0;
+                        break;
+                    case ISP_INC_PTR:
+                        for (i=0; i<rx_message[2]; i++)
+                        {
+                            isp_inc_pointer();
+                        }
+                        txByte (0x85);
+                        rx_state = 0;
+                        break;
+                    case ISP_READ_PGM:
+                        txByte (0x86);
+                        isp_read_pgm(flash_buffer,rx_message[2]);
+                        for (i=0;i<rx_message[2];i++)
+                        {
+                            txByte (flash_buffer[i]&0xFF);
+                            txByte (flash_buffer[i]>>8);
+                        }
+                        rx_state = 0;
+                        break;
+                    case ISP_MASS_ERASE:
+                        isp_mass_erase();
+                        txByte (0x87);
+                        rx_state = 0;
+                        break;
+                    case ISP_WRITE_PGM:
+                        for (i=0;i<rx_message[2]/2;i++)
+                        {
+                            flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+4]))<<8) + (((unsigned int)(rx_message[(2*i)+0+4]))<<0);
+                        }
+                        isp_write_pgm(flash_buffer,rx_message[2]/2,rx_message[3]);
+                        txByte (0x88);
+                        rx_state = 0;
+                        break;
+                    case ISP_RESET_PTR:
+                        isp_reset_pointer_16d();
+                        txByte (0x89);
+                        rx_state = 0;
+                        break;        
+                    case P18_ENTER_PROGMODE:
+                        p18_enter_progmode();
+                        txByte (0x90);
+                        rx_state = 0;
+                        break;
+                    case P18_ENTER_PROGMODE:
+                        txByte (0x91);
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        p_18_isp_read_pgm (flash_buffer, addr, rx_message[2]);
+                        for (i=0;i<rx_message[2];i++)
+                        {
+                            txByte (flash_buffer[i]&0xFF);
+                            txByte (flash_buffer[i]>>8);
+                        }
+                        rx_state = 0;
+                        break;
+                    case P18_ISP_WRITE_PGM:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        for (i=0;i<rx_message[2]/2;i++)
+                        {
+                            flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+6]))<<8) + (((unsigned int)(rx_message[(2*i)+0+6]))<<0);
+                        }
+                        p18_isp_write_pgm (flash_buffer, addr, rx_message[2]/2);
+                        txByte (0x92);
+                        rx_state = 0;
+                        break;
+                    case P18_ISP_MASS_ERASE:
+                        p18_isp_mass_erase();
+                        txByte (0x93);
+                        rx_state = 0;
+                        break;
+                    case P18_ISP_WRITE_CFG:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        p18_isp_write_cfg (rx_message[6],rx_message[7], addr);
+                        txByte (0x94);
+                        rx_state = 0;
+                        break;
+                    case P18FJ_ISP_MASS_ERASE:
+                        p18fj_isp_mass_erase();
+                        txByte (0xA3);
+                        rx_state = 0;
+                        break;
+                    case P18FK_ISP_MASS_ERASE:
+                        p18fk_isp_mass_erase (rx_message[2], rx_message[3], rx_message[4]);
+                        txByte (0xB0);
+                        rx_state = 0;
+                        break;
+                    case P18FK_ISP_WRITE_PGM:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        for (i=0;i<rx_message[2]/2;i++)
+                        {
+                            flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+6]))<<8) + (((unsigned int)(rx_message[(2*i)+0+6]))<<0);
+                        }
+                        p18fk_isp_write_pgm (flash_buffer, addr, rx_message[2]/2);
+                        txByte (0xB1);
+                        rx_state = 0;
+                        break;
+                    case P18FK_ISP_WRITE_CFG:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        p18fk_isp_write_cfg (rx_message[6],rx_message[7], addr);
+                        txByte (0xB2);
+                        rx_state = 0;
+                        break;  
+                    case P16C_ENTER_PROGMODE:
+                        p16c_enter_progmode();
+                        txByte (0xC0);
+                        rx_state = 0;   
+                        break;      
+                    case P16C_ISP_READ_PGM:
+                        txByte (0xC1);
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        p16c_isp_read_pgm (flash_buffer, addr, rx_message[2]);
+                        for (i=0;i<rx_message[2];i++)
+                        {
+                            txByte (flash_buffer[i]&0xFF);
+                            txByte (flash_buffer[i]>>8);
+                        }
+                        rx_state = 0;
+                        break;
+                    case P16C_ISP_WRITE_PGM:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        for (i=0;i<rx_message[2]/2;i++)
+                        {
+                            flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+6]))<<8) + (((unsigned int)(rx_message[(2*i)+0+6]))<<0);
+                        }
+                        p16c_isp_write_pgm (flash_buffer, addr, rx_message[2]/2);
+                        txByte (0xC2);
+                        rx_state = 0;
+                        break;
+                    case P16C_BULK_ERASE:
+                        p16c_set_pc (0x8000);
+                        p16c_bulk_erase ();
+                        txByte (0xC3);
+                        rx_state = 0;
+                        break;         
+                    case P16C_ISP_WRITE_CFG:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        cfg_val = rx_message[6];
+                        cfg_val = (cfg_val<<8) + rx_message[7];
+                        p16c_isp_write_cfg (cfg_val, addr);
+                        txByte (0xC4);
+                        rx_state = 0;
+                        break;                      
+                    case P18Q_ISP_WRITE_CFG:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        cfg_val = rx_message[6];
+                        cfg_val = (cfg_val<<8) + rx_message[7];
+                        p18q_isp_write_cfg (cfg_val, addr);
+                        txByte (0xC5);
+                        rx_state = 0;
+                        break; 
+                    case P18Q_ISP_WRITE_PGM:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        for (i=0;i<rx_message[2]/2;i++)
+                        {
+                            flash_buffer[i] = (((unsigned int)(rx_message[(2*i)+1+6]))<<8) + (((unsigned int)(rx_message[(2*i)+0+6]))<<0);
+                        }
+                        p18q_isp_write_pgm (flash_buffer, addr, rx_message[2]/2);
+                        txByte (0xC6);
+                        rx_state = 0;
+                        break;
+                    case P18Q_ISP_READ_CFG:
+                        txByte (0xC7);
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        p18q_isp_read_cfg (flash_buffer, addr, rx_message[2]);
+                        for (i=0;i<rx_message[2];i++)
+                        {
+                            txByte (flash_buffer[i]&0xFF);
+                        }
+                        rx_state = 0;
+                        break;
+                    case P18Q_ISP_WRITE_CFG_ADDR:
+                        addr = (((unsigned long)(rx_message[3]))<<16) + (((unsigned long)(rx_message[4]))<<8) + (((unsigned long)(rx_message[5]))<<0);
+                        p18q_isp_write_cfg (rx_message[6], addr);
+                        txByte (0xC5);
+                        rx_state = 0;
+                        break; 
+                    case P18QXX_BULK_ERASE:
+                        p18qxx_bulk_erase ();
+                        txByte (0xC3);
+                        rx_state = 0;
+                        break;         
+                    case ENTER_PROGMODE_HVP:
+                        enter_progmode_hvp();
+                        txByte (0x81);
+                        rx_state = 0;
+                        break;
+                    case EXIT_PROGMODE_HVP:
+                        exit_progmode_hvp();
+                        txByte (0x82);
+                        rx_state = 0;
+                        break;
+                    default:
+                        ; // unknown command
+
+                } // switch        
             } // if rx_state
         } // if usart _rx_rdy
     } // while 
 } // main
 
 
-unsigned char rx_state_machine (unsigned char state, unsigned char rx_char)
-{
-if (state==0)
-  {
-    rx_message_ptr = 0;
-    rx_message[rx_message_ptr++] = rx_char;
-    return 1;
-  }
-if (state==1)
-  {
-    bytes_to_receive = rx_char;
-    rx_message[rx_message_ptr++] = rx_char;
-    if (bytes_to_receive==0) return 3;
-    return 2;
-  }
-if (state==2)
-  {
-    rx_message[rx_message_ptr++] = rx_char;
-    bytes_to_receive--;
-    if (bytes_to_receive==0) return 3;
-  }
-return state;  
-}
 
 void isp_read_pgm (unsigned int * data, unsigned char n)
 {
@@ -1078,62 +1157,3 @@ isp_send_24_msb(data);
 _delay_us(65); 
 }
 
-
-void usart_tx_b(uint8_t data)
-{
-while (!(UCSR0A & _BV(UDRE0)));
-UDR0 = data;
-} 
-
-void usart_tx_s(uint8_t * data)
-{
-while (*data!=0) 
-  usart_tx_b(*data++);
-} 
-
-uint8_t usart_rx_rdy(void)
-{
-if (UCSR0A & _BV(RXC0))
-  return 1;
-else
-  return 0;
-}
-
-uint8_t usart_rx_b(void)
-{
-return (uint8_t) UDR0;
-} 
-
-void usart_tx_hexa_8 (uint8_t value)
-{
-//uint8_t temp;
-//temp = value;
-usart_tx_b('0');
-usart_tx_b('x');
-usart_tx_hexa_8b(value);
-usart_tx_b(' ');
-}
-
-void usart_tx_hexa_8b (uint8_t value)
-{
-uint8_t temp;
-temp = value;
-temp = ((temp>>4)&0x0F);
-if (temp<10) temp = temp + '0';
-else temp = temp + 'A'- 10;
-usart_tx_b(temp);
-temp = value;
-temp = ((temp>>0)&0x0F);
-if (temp<10) temp = temp + '0';
-else temp = temp + 'A' - 10;
-usart_tx_b(temp);
-}
-
-void usart_tx_hexa_16 (uint16_t value)
-{
-  usart_tx_b('0');
-  usart_tx_b('x');
-  usart_tx_hexa_8b((value>>8)&0xFF);
-  usart_tx_hexa_8b(value&0xFF);
-  usart_tx_b(' ');
-}

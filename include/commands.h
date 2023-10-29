@@ -37,10 +37,10 @@
 #define ISP_READ_PGM            0x06
 #define ISP_MASS_ERASE          0x07
 #define ISP_WRITE_PGM           0x08
-#define ISP_RESET_PTR           0x09
+#define ISP_RESET_PTR_16D       0x09
 
 #define P18_ENTER_PROGMODE      0x10
-#define P18_ENTER_PROGMODE      0x11
+#define P18_ISP_READ_PGM        0x11
 #define P18_ISP_WRITE_PGM       0x12
 #define P18_ISP_MASS_ERASE      0x13
 #define P18_ISP_WRITE_CFG       0x14

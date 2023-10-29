@@ -44,3 +44,6 @@ Temporary Items
 
 # Tempfiles
 .~lock.info.*#
+
+# PlatformIO Cache
+.pio

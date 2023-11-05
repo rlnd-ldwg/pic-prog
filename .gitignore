@@ -53,3 +53,6 @@ ArdPicProg-Bauanleitung-rev02.pdf
 PIC16F193x.pdf
 info.ods
 convert.py
+KICAD/*-backups
+fp-info-cache
+.~lock.*#

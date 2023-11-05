@@ -47,3 +47,9 @@ Temporary Items
 
 # PlatformIO Cache
 .pio
+
+# extra files
+ArdPicProg-Bauanleitung-rev02.pdf
+PIC16F193x.pdf
+info.ods
+convert.py
